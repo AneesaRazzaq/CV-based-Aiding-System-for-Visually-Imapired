@@ -1,0 +1,56 @@
+import numpy as np
+import cv2
+from subprocess import call
+
+# Define the list of class labels MobileNet SSD was trained to detect
+CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
+    "bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
+    "dog", "horse", "motorbike", "person", "pottedplant", "sheep",
+    "sofa", "train", "tvmonitor"]
+
+# Generate random colors for each class
+COLORS = np.random.uniform(0, 255, size=(len(CLASSES), 3))
+
+# Load the pre-trained model
+net = cv2.dnn.readNetFromCaffe('path/to/deploy.prototxt', 'path/to/mobilenet_iter_73000.caffemodel')
+
+# Load the input image
+image = cv2.imread('/home/pi/Desktop/object_detection/image/example_01.jpg')
+(h, w) = image.shape[:2]
+
+# Prepare the image as a blob and set it as the input to the network
+blob = cv2.dnn.blobFromImage(cv2.resize(image, (300, 300)), 0.007843, (300, 300), 127.5)
+net.setInput(blob)
+
+print("[INFO] computing object detections...")
+detections = net.forward()
+
+# Define the espeak command
+cmd_beg = 'espeak '
+cmd_end = ' 2>/dev/null'  # Suppress espeak output
+
+def speak(text):
+    text = text.replace(' ', '_')
+    call([cmd_beg + text + cmd_end], shell=True)
+
+# Loop over the detections
+for i in np.arange(0, detections.shape[2]):
+    confidence = detections[0, 0, i, 2]
+    
+    if confidence > 0.2:
+        idx = int(detections[0, 0, i, 1])
+        box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+        (startX, startY, endX, endY) = box.astype("int")
+        
+        label = "{}: {:.2f}%".format(CLASSES[idx], confidence * 100)
+        print("[INFO] {}".format(label))
+        speak(CLASSES[idx])
+        
+        cv2.rectangle(image, (startX, startY), (endX, endY), COLORS[idx], 2)
+        y = startY - 15 if startY - 15 > 15 else startY + 15
+        cv2.putText(image, label, (startX, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, COLORS[idx], 2)
+
+# Display the output image
+cv2.imshow("Output", image)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
